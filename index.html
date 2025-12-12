@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <title>3D Konteyner Yükleme Simülatörü</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
   <meta name="theme-color" content="#222222" />
   <link rel="manifest" href="manifest.json" />
  <style>
@@ -99,6 +102,15 @@
       height: 55vh;
     }
   }
+   /* iPhone tam ekran hilesi — Safari barlarını gizler */
+html, body {
+  height: -webkit-fill-available;
+}
+
+#three-container {
+  height: calc(100vh - 0px);
+  min-height: -webkit-fill-available;
+}
   </style>
 </head>
 <body>
@@ -709,4 +721,5 @@
   </script>
 </body>
 </html>
+
 
