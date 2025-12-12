@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <title>3D Konteyner Yükleme Simülatörü</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+    }
+    body {
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    #sidebar {
+      width: 340px;
+      background: #f5f5f5;
+      border-right: 1px solid #ccc;
+      padding: 12px;
+      overflow-y: auto;
+    }
+    #sidebar h2 {
+      margin-bottom: 8px;
+      font-size: 18px;
+    }
+    #sidebar h3 {
+      margin-top: 12px;
+      font-size: 15px;
+    }
+    label {
+      display: block;
+      margin-top: 6px;
+      font-size: 13px;
+    }
+    input, select {
+      width: 100%;
+      padding: 4px 6px;
+      margin-top: 2px;
+      font-size: 13px;
+    }
+    button {
+      margin-top: 8px;
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    #product-list {
+      margin-top: 6px;
+      font-size: 12px;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 6px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    #product-list div {
+      margin-bottom: 4px;
+    }
+    #summary {
+      margin-top: 6px;
+      font-size: 12px;
+      background: #fff;
+      border: 1px solid #ccc;
+      padding: 6px;
+    }
+    #three-container {
+      flex: 1;
+      position: relative;
+      background: #222;
+    }
+    #three-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #info {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      color: #fff;
+      font-size: 12px;
+      background: rgba(0,0,0,0.4);
+      padding: 4px 6px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div id="sidebar">
+    <h2>3D Konteyner Yükleme</h2>
+
+    <h3>Konteyner Seçimi</h3>
+    <label>Hazır Ölçüler:
+      <select id="cont-preset">
+        <option value="custom">Özel / Manuel</option>
+        <option value="20DC">20' Dry (589 x 235 x 239 cm)</option>
+        <option value="40DC">40' Dry (1203 x 235 x 239 cm)</option>
+        <option value="40HC">40' High Cube (1203 x 235 x 269 cm)</option>
+        <option value="45HC">45' High Cube (1355 x 235 x 269 cm)</option>
+      </select>
+    </label>
+
+    <h3>Konteyner Ölçüleri (cm)</h3>
+    <label>İç Uzunluk (X):
+      <input id="cont-length" type="number" value="1203" />
+    </label>
+    <label>İç Genişlik (Z):
+      <input id="cont-width" type="number" value="235" />
+    </label>
+    <label>İç Yükseklik (Y):
+      <input id="cont-height" type="number" value="239" />
+    </label>
+    <button id="btn-update-container">Konteyneri Güncelle</button>
+
+    <h3>Palet Seçimi</h3>
+    <label>Palet:
+      <select id="pallet-select">
+        <option value="none">Palet yok</option>
+        <option value="euro15">Euro Palet (yükseklik 15 cm)</option>
+      </select>
+    </label>
+
+    <h3>Yeni Ürün (Koli)</h3>
+    <label>Ürün Kodu:
+      <input id="prod-code" type="text" placeholder="Ör: uara2400" />
+    </label>
+    <label>Boy (X, cm):
+      <input id="prod-l" type="number" value="40" />
+    </label>
+    <label>En (Z, cm):
+      <input id="prod-w" type="number" value="30" />
+    </label>
+    <label>Yükseklik (Y, cm):
+      <input id="prod-h" type="number" value="25" />
+    </label>
+    <label>Ağırlık (kg) [şimdilik sadece bilgi]:
+      <input id="prod-weight" type="number" value="10" />
+    </label>
+    <label>Adet:
+      <input id="prod-qty" type="number" value="10" />
+    </label>
+
+    <button id="btn-add-product">Ürünü Ekle ve Yerleştir</button>
+    <button id="btn-reset">Her Şeyi Temizle</button>
+    <button id="btn-load-json">Python JSON'dan Yükle (data.json)</button>
+
+    <h3>Eklenen Ürünler</h3>
+    <div id="product-list">
+      Henüz ürün eklenmedi.
+    </div>
+
+    <h3>Özet</h3>
+    <div id="summary">
+      Toplam Ağırlık: 0 kg<br />
+      Kullanılan Hacim: 0 m³<br />
+      Boş Hacim: 0 m³<br />
+      Doluluk: 0 %<br />
+      Yerleşen Koli: 0<br />
+      Sığmayan Koli: 0
+    </div>
+
+    <p style="margin-top:10px;font-size:11px;color:#555;">
+      Not: Bu demo basit bir doldurma algoritması kullanır; optimum yerleşim garantisi yoktur.
+      Ama görsel olarak hangi ürünün nereye yerleştiğini 3D görebilirsin.
+    </p>
+  </div>
+
+  <div id="three-container">
+    <canvas id="three-canvas"></canvas>
+    <div id="info">
+      Mouse sol: Döndür • Orta/Teker: Zoom • Sağ: Kaydır
+    </div>
+  </div>
+
+  <!-- Three.js ve OrbitControls (R146 – uyumlu sürüm) -->
+  <script src="https://unpkg.com/three@0.146.0/build/three.min.js"></script>
+  <script src="https://unpkg.com/three@0.146.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    // ----- VERİLER -----
+    const products = [];              // {code,L,W,H,weight,qty}
+    const colorByCode = {};
+    let containerDims = { L: 1203, W: 235, H: 239 };
+    let palletMode = "none";          // "none" | "euro15"
+
+    let stats = {
+      totalWeight: 0,
+      usedVolume: 0,
+      freeVolume: 0,
+      utilization: 0,
+      placedCount: 0,
+      skippedCount: 0
+    };
+
+    // ----- THREE SAHNE -----
+    let scene, camera, renderer, controls;
+    let containerMesh, containerEdges, palletMesh;
+    let axesHelper, gridHelper;
+    const boxMeshes = [];
+    const layerPlanes = [];
+    const canvas = document.getElementById("three-canvas");
+
+    function getCanvasSize() {
+      const container = document.getElementById("three-container");
+      return {
+        width: container.clientWidth || window.innerWidth - 340,
+        height: container.clientHeight || window.innerHeight
+      };
+    }
+
+    function initThree() {
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x222222);
+
+      const size = getCanvasSize();
+      camera = new THREE.PerspectiveCamera(45, size.width / size.height, 1, 10000);
+      camera.position.set(1500, 800, 1500);
+
+      renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+      renderer.setSize(size.width, size.height);
+
+      const ambient = new THREE.AmbientLight(0xffffff, 0.6);
+      scene.add(ambient);
+
+      const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+      dirLight.position.set(1000, 1000, 500);
+      scene.add(dirLight);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+      axesHelper = new THREE.AxesHelper(500);
+      scene.add(axesHelper);
+
+      gridHelper = new THREE.GridHelper(2000, 40, 0x555555, 0x555555);
+      gridHelper.position.set(0, 0, 0);
+      scene.add(gridHelper);
+
+      window.addEventListener("resize", onWindowResize);
+      animate();
+    }
+
+    function onWindowResize() {
+      const size = getCanvasSize();
+      camera.aspect = size.width / size.height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(size.width, size.height);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      renderer.render(scene, camera);
+    }
+
+    // ----- RENK SEÇİCİ -----
+    function getColorForCode(code) {
+      if (colorByCode[code]) return colorByCode[code];
+      let hash = 0;
+      for (let i = 0; i < code.length; i++) {
+        hash = code.charCodeAt(i) + ((hash << 5) - hash);
+      }
+      const r = (hash & 0xff0000) >> 16;
+      const g = (hash & 0x00ff00) >> 8;
+      const b = hash & 0x0000ff;
+      const color = new THREE.Color(r / 255, g / 255, b / 255);
+      colorByCode[code] = color;
+      return color;
+    }
+
+    // ----- KONTEYNER ÇİZİMİ -----
+    function createOrUpdateContainer() {
+      // Eski mesh’leri sil
+      if (containerMesh) {
+        scene.remove(containerMesh);
+        containerMesh.geometry.dispose();
+        containerMesh.material.dispose();
+        containerMesh = null;
+      }
+      if (containerEdges) {
+        scene.remove(containerEdges);
+        containerEdges.geometry.dispose();
+        containerEdges.material.dispose();
+        containerEdges = null;
+      }
+      if (palletMesh) {
+        scene.remove(palletMesh);
+        palletMesh.geometry.dispose();
+        palletMesh.material.dispose();
+        palletMesh = null;
+      }
+
+      const L = containerDims.L;
+      const W = containerDims.W;
+      const H = containerDims.H;
+
+      const geom = new THREE.BoxGeometry(L, H, W);
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.05
+      });
+      containerMesh = new THREE.Mesh(geom, mat);
+      containerMesh.position.set(L / 2, H / 2, W / 2);
+      scene.add(containerMesh);
+
+      const edgesGeom = new THREE.EdgesGeometry(geom);
+      const edgesMat = new THREE.LineBasicMaterial({ color: 0x00ffff });
+      containerEdges = new THREE.LineSegments(edgesGeom, edgesMat);
+      containerEdges.position.copy(containerMesh.position);
+      scene.add(containerEdges);
+
+      // Palet (varsa)
+      const palletHeight = palletMode === "euro15" ? 15 : 0;
+      if (palletHeight > 0) {
+        const pGeom = new THREE.BoxGeometry(L, palletHeight, W);
+        const pMat = new THREE.MeshBasicMaterial({
+          color: 0x8b4513,
+          transparent: true,
+          opacity: 0.3
+        });
+        palletMesh = new THREE.Mesh(pGeom, pMat);
+        palletMesh.position.set(L / 2, palletHeight / 2, W / 2);
+        scene.add(palletMesh);
+      }
+
+      // Grid merkezini konteyner altına al
+      gridHelper.position.set(L / 2, 0, W / 2);
+
+      // Kamerayı konteyner etrafına ayarla
+      const cx = L / 2;
+      const cy = H / 2;
+      const cz = W / 2;
+      const maxDim = Math.max(L, H, W);
+      const dist = maxDim * 1.8;
+
+      camera.position.set(cx + dist, cy + dist, cz + dist);
+      controls.target.set(cx, cy, cz);
+      controls.update();
+    }
+
+    // ----- SAHNEYİ TEMİZLE (KOLİLER) -----
+    function clearBoxes() {
+      boxMeshes.forEach(m => {
+        scene.remove(m);
+        m.geometry.dispose();
+        m.material.dispose();
+      });
+      boxMeshes.length = 0;
+
+      layerPlanes.forEach(p => {
+        scene.remove(p);
+        p.geometry.dispose();
+        p.material.dispose();
+      });
+      layerPlanes.length = 0;
+    }
+
+    // ----- ORYANTASYON SEÇİMİ (BASİT "OPTİMUM") -----
+    function chooseBestOrientation(box, dims) {
+      const candidates = [
+        { L: box.L, W: box.W, H: box.H },
+        { L: box.L, W: box.H, H: box.W },
+        { L: box.W, W: box.L, H: box.H },
+        { L: box.W, W: box.H, H: box.L },
+        { L: box.H, W: box.L, H: box.W },
+        { L: box.H, W: box.W, H: box.L }
+      ];
+
+      let best = candidates[0];
+      let bestCount = -1;
+
+      for (const c of candidates) {
+        if (c.L > dims.L || c.W > dims.W || c.H > dims.H) continue;
+        const perLayer = Math.floor(dims.L / c.L) * Math.floor(dims.W / c.W);
+        const layers = Math.floor(dims.H / c.H);
+        const capacity = perLayer * layers;
+        if (capacity > bestCount) {
+          bestCount = capacity;
+          best = c;
+        }
+      }
+
+      return best;
+    }
+
+    // ----- ÖZET PANELİ GÜNCELLEME -----
+    function updateStatsPanel() {
+      const summary = document.getElementById("summary");
+      const toM3 = v => (v / 1_000_000).toFixed(2); // cm³ → m³
+
+      summary.innerHTML = `
+        Toplam Ağırlık: ${stats.totalWeight.toFixed(1)} kg<br />
+        Kullanılan Hacim: ${toM3(stats.usedVolume)} m³<br />
+        Boş Hacim: ${toM3(Math.max(stats.freeVolume, 0))} m³<br />
+        Doluluk: ${stats.utilization.toFixed(1)} %<br />
+        Yerleşen Koli: ${stats.placedCount}<br />
+        Sığmayan Koli: ${stats.skippedCount}
+      `;
+    }
+
+    // ----- ÜRÜNLERİ YERLEŞTİR -----
+    function placeProducts() {
+      clearBoxes();
+
+      const L = containerDims.L;
+      const W = containerDims.W;
+      const H = containerDims.H;
+
+      const palletHeight = palletMode === "euro15" ? 15 : 0;
+      const effectiveH = H - palletHeight;
+
+      if (effectiveH <= 0) {
+        alert("Palet yüksekliği konteyner yüksekliğini geçti. Ölçüleri kontrol et.");
+        return;
+      }
+
+      // İstatistikleri sıfırla
+      stats = {
+        totalWeight: 0,
+        usedVolume: 0,
+        freeVolume: 0,
+        utilization: 0,
+        placedCount: 0,
+        skippedCount: 0
+      };
+
+      let x = 0;
+      let y = palletHeight;  // paletin üstünden başla
+      let z = 0;
+      const layerHeights = new Set();
+
+      const dimsForOpt = { L, W, H: effectiveH };
+
+      for (const pRaw of products) {
+        if (pRaw.qty <= 0) continue;
+
+        const oriented = chooseBestOrientation(pRaw, dimsForOpt);
+        const p = {
+          ...pRaw,
+          L: oriented.L,
+          W: oriented.W,
+          H: oriented.H
+        };
+
+        const color = getColorForCode(p.code);
+
+        for (let i = 0; i < p.qty; i++) {
+          if (x + p.L > L) {
+            x = 0;
+            z += p.W;
+          }
+          if (z + p.W > W) {
+            z = 0;
+            x = 0;
+            y += p.H;
+          }
+          if (y + p.H > palletHeight + effectiveH) {
+            // Bu üründen geriye kalanlar sığmıyor
+            stats.skippedCount += (p.qty - i);
+            break;
+          }
+
+          const geom = new THREE.BoxGeometry(p.L, p.H, p.W);
+          const mat = new THREE.MeshLambertMaterial({ color });
+          const mesh = new THREE.Mesh(geom, mat);
+
+          // Kutu kenarlıkları
+          const edgeG = new THREE.EdgesGeometry(geom);
+          const edgeM = new THREE.LineBasicMaterial({ color: 0x000000 });
+          const edges = new THREE.LineSegments(edgeG, edgeM);
+          mesh.add(edges);
+
+          mesh.position.set(
+            x + p.L / 2,
+            y + p.H / 2,
+            z + p.W / 2
+          );
+
+          scene.add(mesh);
+          boxMeshes.push(mesh);
+
+          layerHeights.add(y);
+
+          // İstatistik güncelle
+          stats.totalWeight += pRaw.weight;
+          const vol = p.L * p.W * p.H;
+          stats.usedVolume += vol;
+          stats.placedCount++;
+
+          x += p.L;
+        }
+      }
+
+      const containerVolume = L * W * H;
+      stats.freeVolume = containerVolume - stats.usedVolume;
+      stats.utilization = containerVolume > 0
+        ? (stats.usedVolume / containerVolume) * 100
+        : 0;
+
+      // Katman zeminleri
+      layerHeights.forEach(yh => {
+        const planeGeo = new THREE.PlaneGeometry(L, W);
+        const planeMat = new THREE.MeshBasicMaterial({
+          color: 0xffffff,
+          transparent: true,
+          opacity: 0.03,
+          side: THREE.DoubleSide
+        });
+        const plane = new THREE.Mesh(planeGeo, planeMat);
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.set(L / 2, yh, W / 2);
+        scene.add(plane);
+        layerPlanes.push(plane);
+      });
+
+      updateStatsPanel();
+    }
+
+    // ----- ÜRÜN LİSTESİNİ YENİLE -----
+    function refreshProductList() {
+      const listDiv = document.getElementById("product-list");
+      if (products.length === 0) {
+        listDiv.innerHTML = "Henüz ürün eklenmedi.";
+        updateStatsPanel();
+        return;
+      }
+      listDiv.innerHTML = "";
+      products.forEach(p => {
+        const color = getColorForCode(p.code);
+        const colorHex = "#" + color.getHexString();
+        const div = document.createElement("div");
+        div.innerHTML =
+          `<span style="display:inline-block;width:10px;height:10px;background:${colorHex};margin-right:5px;border:1px solid #000;"></span>` +
+          `<strong>${p.code}</strong> - ${p.qty} adet ` +
+          `(${p.L}x${p.W}x${p.H} cm, ${p.weight} kg)`;
+        listDiv.appendChild(div);
+      });
+    }
+
+    // ----- JSON'DAN YÜKLE (data.json) -----
+    async function loadFromJson() {
+      try {
+        const res = await fetch("data.json");
+        if (!res.ok) {
+          alert("data.json okunamadı. index.html ile aynı klasörde ve server üzerinden olduğundan emin ol.");
+          return;
+        }
+        const data = await res.json();
+
+        if (data.container) {
+          const { L, W, H } = data.container;
+          containerDims = { L, W, H };
+          document.getElementById("cont-length").value = L;
+          document.getElementById("cont-width").value = W;
+          document.getElementById("cont-height").value = H;
+        }
+
+        products.length = 0;
+        if (Array.isArray(data.products)) {
+          data.products.forEach(p => {
+            products.push({
+              code: p.code,
+              L: p.L,
+              W: p.W,
+              H: p.H,
+              weight: p.weight || 0,
+              qty: p.qty || 1
+            });
+          });
+        }
+
+        refreshProductList();
+        createOrUpdateContainer();
+        placeProducts();
+      } catch (err) {
+        console.error(err);
+        alert("JSON okunurken hata: " + err.message);
+      }
+    }
+
+    // ----- ÖN AYARLAR -----
+    function applyPreset(preset) {
+      const lengthInput = document.getElementById("cont-length");
+      const widthInput = document.getElementById("cont-width");
+      const heightInput = document.getElementById("cont-height");
+
+      if (preset === "20DC") {
+        lengthInput.value = 589;
+        widthInput.value = 235;
+        heightInput.value = 239;
+      } else if (preset === "40DC") {
+        lengthInput.value = 1203;
+        widthInput.value = 235;
+        heightInput.value = 239;
+      } else if (preset === "40HC") {
+        lengthInput.value = 1203;
+        widthInput.value = 235;
+        heightInput.value = 269;
+      } else if (preset === "45HC") {
+        lengthInput.value = 1355;
+        widthInput.value = 235;
+        heightInput.value = 269;
+      }
+    }
+
+    // ----- UI KURULUMU -----
+    function setupUI() {
+      document.getElementById("cont-preset").addEventListener("change", (e) => {
+        const value = e.target.value;
+        if (value === "custom") return;
+        applyPreset(value);
+        const L = parseFloat(document.getElementById("cont-length").value);
+        const W = parseFloat(document.getElementById("cont-width").value);
+        const H = parseFloat(document.getElementById("cont-height").value);
+        containerDims = { L, W, H };
+        createOrUpdateContainer();
+        placeProducts();
+      });
+
+      document.getElementById("btn-update-container").addEventListener("click", () => {
+        const L = parseFloat(document.getElementById("cont-length").value);
+        const W = parseFloat(document.getElementById("cont-width").value);
+        const H = parseFloat(document.getElementById("cont-height").value);
+        if (L <= 0 || W <= 0 || H <= 0) {
+          alert("Konteyner ölçüleri pozitif olmalı.");
+          return;
+        }
+        containerDims = { L, W, H };
+        createOrUpdateContainer();
+        placeProducts();
+      });
+
+      document.getElementById("pallet-select").addEventListener("change", (e) => {
+        palletMode = e.target.value;
+        createOrUpdateContainer();
+        placeProducts();
+      });
+
+      document.getElementById("btn-add-product").addEventListener("click", () => {
+        const code = document.getElementById("prod-code").value.trim() || "KODSUZ";
+        const L = parseFloat(document.getElementById("prod-l").value);
+        const W = parseFloat(document.getElementById("prod-w").value);
+        const H = parseFloat(document.getElementById("prod-h").value);
+        const weight = parseFloat(document.getElementById("prod-weight").value) || 0;
+        const qty = parseInt(document.getElementById("prod-qty").value, 10);
+
+        if (L <= 0 || W <= 0 || H <= 0 || qty <= 0) {
+          alert("Ölçüler ve adet pozitif olmalı.");
+          return;
+        }
+
+        products.push({ code, L, W, H, weight, qty });
+        refreshProductList();
+        createOrUpdateContainer();
+        placeProducts();
+      });
+
+      document.getElementById("btn-reset").addEventListener("click", () => {
+        products.length = 0;
+        refreshProductList();
+        clearBoxes();
+        stats = {
+          totalWeight: 0,
+          usedVolume: 0,
+          freeVolume: 0,
+          utilization: 0,
+          placedCount: 0,
+          skippedCount: 0
+        };
+        updateStatsPanel();
+      });
+
+      document.getElementById("btn-load-json").addEventListener("click", () => {
+        loadFromJson();
+      });
+
+      refreshProductList();
+      updateStatsPanel();
+    }
+
+    // ----- BAŞLAT -----
+    initThree();
+    createOrUpdateContainer();
+    setupUI();
+  </script>
+</body>
+</html>
